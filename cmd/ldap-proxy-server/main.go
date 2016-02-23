@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 const searchprefix = "/search/"
@@ -46,6 +47,16 @@ func wrapLDAP(fn func(http.ResponseWriter, *http.Request, string), address strin
 	}
 }
 
+func wrapLog(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		startTime := time.Now()
+		fn(w, r)
+		endTime := time.Now()
+		log.Printf("served %v to %v in %v",
+			r.URL, r.RemoteAddr, endTime.Sub(startTime))
+	}
+}
+
 func main() {
 	address := flag.String("address", ":8082", "Listen and serve at this address")
 	flag.Parse()
@@ -55,7 +66,7 @@ func main() {
 		log.Fatal("LDAP_ADDRESS is not set in env")
 	}
 
-	http.HandleFunc(searchprefix, wrapLDAP(searchHandler, ldapAddress))
+	http.HandleFunc(searchprefix, wrapLog(wrapLDAP(searchHandler, ldapAddress)))
 	log.Printf("ldap-proxy listening at %v", *address)
 	log.Fatal(http.ListenAndServe(*address, nil))
 }

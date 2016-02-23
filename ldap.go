@@ -1,5 +1,7 @@
 package ldapproxy
 
+/* See https://godoc.org/github.com/go-ldap/ldap */
+
 import (
 	"crypto/tls"
 	"fmt"
@@ -51,9 +53,11 @@ func Search(ldapAddress, pattern string) (chan Person, error) {
 			//entry.Print()
 			person := Person{}
 			person.Dn = entry.DN
+			// Save only one value for most attributes since that's all we store.
 			person.FirstName = entry.GetAttributeValue("givenName")
 			person.LastName = entry.GetAttributeValue("sn")
 			person.OrgStatus = entry.GetAttributeValue("organizationalStatus")
+			// We do use multiple uid values for uid (for alumni).
 			person.Uid = entry.GetAttributeValues("uid")
 			persons <- person
 		}
