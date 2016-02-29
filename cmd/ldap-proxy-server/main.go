@@ -21,6 +21,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request, ldapAddress string) {
 	persons, err := ldapproxy.Search(ldapAddress, pattern)
 	if err != nil {
 		log.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -36,18 +37,12 @@ func searchHandler(w http.ResponseWriter, r *http.Request, ldapAddress string) {
 		}
 		if err := enc.Encode(&person); err != nil {
 			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		first = false
 	}
 	fmt.Fprintln(w, "]")
-}
-
-func wrapCORS(fn http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		fn(w, r)
-	}
 }
 
 func wrapLDAP(fn func(http.ResponseWriter, *http.Request, string), address string) http.HandlerFunc {
