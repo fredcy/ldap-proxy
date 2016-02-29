@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	ldapproxy "github.com/fredcy/ldap-proxy"
+	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"os"
@@ -14,7 +15,8 @@ import (
 const searchprefix = "/search/"
 
 func searchHandler(w http.ResponseWriter, r *http.Request, ldapAddress string) {
-	pattern := r.URL.Path[len(searchprefix):]
+	vars := mux.Vars(r)
+	pattern := vars["query"]
 
 	persons, err := ldapproxy.Search(ldapAddress, pattern)
 	if err != nil {
@@ -39,6 +41,13 @@ func searchHandler(w http.ResponseWriter, r *http.Request, ldapAddress string) {
 		first = false
 	}
 	fmt.Fprintln(w, "]")
+}
+
+func wrapCORS(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		fn(w, r)
+	}
 }
 
 func wrapLDAP(fn func(http.ResponseWriter, *http.Request, string), address string) http.HandlerFunc {
@@ -66,7 +75,32 @@ func main() {
 		log.Fatal("LDAP_ADDRESS is not set in env")
 	}
 
-	http.HandleFunc(searchprefix, wrapLog(wrapLDAP(searchHandler, ldapAddress)))
+	r := mux.NewRouter()
+
+	r.HandleFunc("/search/{query}", wrapLog(wrapLDAP(searchHandler, ldapAddress)))
+	http.Handle("/", &MyServer{r})
+
 	log.Printf("ldap-proxy listening at %v", *address)
 	log.Fatal(http.ListenAndServe(*address, nil))
+}
+
+/* See http://stackoverflow.com/questions/12830095/setting-http-headers-in-golang about CORS */
+
+type MyServer struct {
+	r *mux.Router
+}
+
+func (s *MyServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if origin := req.Header.Get("Origin"); origin != "" {
+		rw.Header().Set("Access-Control-Allow-Origin", origin)
+		rw.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		rw.Header().Set("Access-Control-Allow-Headers",
+			"Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+	}
+	// Stop here if its Preflighted OPTIONS request
+	if req.Method == "OPTIONS" {
+		return
+	}
+	// Lets Gorilla work
+	s.r.ServeHTTP(rw, req)
 }
