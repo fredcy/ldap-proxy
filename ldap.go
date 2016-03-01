@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"gopkg.in/ldap.v2"
 	"log"
-	"regexp"
 	"strings"
 )
 
@@ -61,6 +60,11 @@ func Search(ldapAddress, pattern string) (chan Person, error) {
 			for _, ou := range ous {
 				ou = strings.ToLower(ou)
 				if ou == "faxes" || ou == "machines" {
+					// ignore entries in these OUs
+					continue entries
+				}
+
+				if strings.HasPrefix(ou, "classof") {
 					continue entries
 				}
 			}
@@ -85,14 +89,9 @@ func Search(ldapAddress, pattern string) (chan Person, error) {
 	return persons, nil
 }
 
-var uninterestingPattern = regexp.MustCompile("(?i:,ou=(faxes|machines),)")
-
-// uninteresting() returns true iff the DN indicates an entry that we want to
-// ignore. This is a hack because DN values are supposed to be opaque.
-func uninteresting(dn string) bool {
-	return uninterestingPattern.Match([]byte(dn))
-}
-
+// ousFromDn does crude parsing on a DN value and returns the 'ou' values other
+// than "People".  E.g. for "uid=kzine,ou=Students,ou=People,dc=imsa,dc=edu" it
+// returns just ["Students"].
 func ousFromDn(dn string) []string {
 	parts := strings.Split(dn, ",")
 	var ous = []string{}
